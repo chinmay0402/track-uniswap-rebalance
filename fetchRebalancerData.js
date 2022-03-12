@@ -43,10 +43,10 @@ const getEvents = async (dsaAccounts) => {
             .filter(transaction => (transactionHashes.has(transaction.transactionHash) && transaction.transactionHash !== transactionHashes.get(transaction.transactionHash)))
             .map(e => {
                 return {
-                    increaseLiquidityTokenId: transactionHashes.get(e.transactionHash),
-                    decreaseLiquidityTokenId: e.returnValues.tokenId,
+                    newTokenId: transactionHashes.get(e.transactionHash),
+                    oldTokenId: e.returnValues.tokenId,
                     transactionHash: e.transactionHash,
-                    liquidity: e.returnValues.liquidity
+                    liquidityRebalanced: e.returnValues.liquidity
                 };
             })
         // append the list for current block range into the overall list
@@ -56,39 +56,35 @@ const getEvents = async (dsaAccounts) => {
         currentFirstBlock = currentToBlock + 1;
     }
 
-    // console.log(allValidTransactions);
-
     // get transaction data of each transaction hash obtained above 
+    let totalLiquidityRebalanced = 0;
+
     transactionData = await Promise.all(allValidTransactions.map(async (transaction) => {
         const result = await web3.eth.getTransaction(transaction.transactionHash);
         return {
-            increaseLiquidityTokenId: transaction.increaseLiquidityTokenId,
-            decreaseLiquidityTokenId: transaction.decreaseLiquidityTokenId,
-            liquidity: transaction.liquidity,
-            to: result.to,
-            from: result.from,
-            hash: result.hash
+            newTokenId: transaction.newTokenId,
+            oldTokenId: transaction.oldTokenId,
+            dsaAddr: result.to,
+            transactionHash: result.hash,
+            liquidityRebalanced: transaction.liquidityRebalanced
         }
     }));
 
     // keep only the transactions that were made
-    const idappTransactions = transactionData.filter(transaction => dsaAccounts.includes(transaction.to.toLowerCase()));
+    const instadappRebalanceTransactions = transactionData.filter(transaction => dsaAccounts.includes(transaction.dsaAddr.toLowerCase()));
 
     // create Sets to store unique users and tokenIds
     const tokenPools = new Set();
 
-    let totalLiquidityRebalanced = 0;
-
-    idappTransactions.forEach(transaction => {
+    instadappRebalanceTransactions.forEach(transaction => {
         // add tokenIds and users of each transaction into respective sets
-        tokenPools.add(transaction.decreaseLiquidityTokenId);
-        tokenPools.add(transaction.increaseLiquidityTokenId);
+        tokenPools.add(transaction.oldTokenId);
+        tokenPools.add(transaction.newTokenId);
+        totalLiquidityRebalanced += Number(transaction.liquidityRebalanced);
+    });
 
-        // update totalRebalancedLiquidity
-        totalLiquidityRebalanced += Number(transaction.liquidity);
-    })
-
-    console.log("Total no. of times the strategy got used: ", idappTransactions.length);
+    console.log("List of all Rebalance Transactions on Instadapp: ", instadappRebalanceTransactions);
+    console.log("Total no. of times the strategy got used: ", instadappRebalanceTransactions.length);
     console.log("Token Pools: ", tokenPools);
     console.log("Total Liquidity rebalanced: ", totalLiquidityRebalanced);
 }
@@ -96,6 +92,7 @@ const getEvents = async (dsaAccounts) => {
 const main = async () => {
     // get list of all dsaAccounts in the protocol
     const dsaAccounts = await getDsaAccounts();
+    // const { dsaAccounts } = require("./dsaAccounts");
     // get data by tracking IncreaseLiquidity and DecreaseLiquidity transactions
     getEvents(dsaAccounts);
 }

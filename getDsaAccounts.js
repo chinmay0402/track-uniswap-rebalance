@@ -27,7 +27,7 @@ const getDsaAccounts = async () => {
             }
         );
 
-        // break out of the loop if the object returns an array with length = 0... 
+        // break out of the loop if the object returns an array with length = 0 
         // since this page has no elements, no need to check for further pages
         if (Object.values(result.data.data.logAccountCreateds).length === 0) break;
 
@@ -50,9 +50,6 @@ const getDsaAccounts = async () => {
         pagenation_variable = result.data.data.logAccountCreateds[Object.values(result.data.data.logAccountCreateds).length - 1].id;
     }
 
-    // prints the number of dsa accounts
-    // console.log("Number of dsa's = ", dsa_accounts.length);
-    // console.log(dsa_accounts);
     return dsa_accounts;
 }
 
