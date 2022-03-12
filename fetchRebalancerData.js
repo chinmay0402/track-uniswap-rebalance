@@ -14,22 +14,21 @@ let transactionData;
 
 const getEvents = async (dsaAccounts) => {
     // store all transaction hashes obtained from IncreaseLiquidity event emits in a set for quick search later on
-    const transactionHashes = new Set();
+    const transactionHashes = new Map();
 
     let latestBlock = await web3.eth.getBlockNumber(); // get the latest block number
-    let currentFirstBlock = 0;
     let allValidTransactionHashes = [];
+    let currentToBlock;
 
-    while(currentFirstBlock <= latestBlock){
-        let currentToBlock = Math.min(latestBlock, currentFirstBlock + 100000);
-
+    for (let currentFirstBlock = 25657968; currentFirstBlock < latestBlock; currentFirstBlock = currentToBlock + 1) {
+        currentToBlock = Math.min(latestBlock, currentFirstBlock + 3000);
         // get past events of type IncreaseLiquidity between currentFirstBlock and currentToBlock block numbers from Uniswap contract
         await contract.getPastEvents("IncreaseLiquidity",
             { fromBlock: currentFirstBlock, toBlock: currentToBlock },
             (err, events) => {
                 // push the transaction hash of all emitted events into the set
                 for (let i = 0; i < events.length; i++) {
-                    transactionHashes.add(events[i].transactionHash);
+                    transactionHashes.set(events[i].transactionHash, events[i].returnValues.tokenId);
                 }
             });
 
@@ -39,13 +38,14 @@ const getEvents = async (dsaAccounts) => {
         );
 
         // filter out transaction hashes between the current block range that emitted both IncreaseLiquidity and DecreaseLiquidity events
+        // also filter according to the condition that the tokenIds for IncreaseLiquidity and DecreaseLiquidity events must be different
         const validTransactionHashesInRange = events.map(e => {
             return {
                 transactionHash: e.transactionHash,
                 tokenId: e.returnValues.tokenId,
                 liquidity: e.returnValues.liquidity
             };
-        }).filter(transaction => transactionHashes.has(transaction.transactionHash));
+        }).filter(transaction => (transactionHashes.has(transaction.transactionHash) && transactionHashes.get(transaction.transactionHash) !== transaction.tokenId));
 
         // append the list for current block range into the overall list
         allValidTransactionHashes = allValidTransactionHashes.concat(validTransactionHashesInRange);
@@ -79,7 +79,7 @@ const getEvents = async (dsaAccounts) => {
         // add tokenIds and users of each transaction into respective sets
         tokenPools.add(transaction.tokenId);
         users.add(transaction.from);
-        
+
         // update totalRebalancedLiquidity
         totalLiquidityRebalanced += Number(transaction.liquidity);
     })
@@ -93,7 +93,6 @@ const getEvents = async (dsaAccounts) => {
 const main = async () => {
     // get list of all dsaAccounts in the protocol
     const dsaAccounts = await getDsaAccounts();
-
     // get data by tracking IncreaseLiquidity and DecreaseLiquidity transactions
     getEvents(dsaAccounts);
 }
