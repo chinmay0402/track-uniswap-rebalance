@@ -17,7 +17,7 @@ const getEvents = async (dsaAccounts) => {
     const transactionHashes = new Map();
 
     let latestBlock = await web3.eth.getBlockNumber(); // get the latest block number
-    let allValidTransactionHashes = [];
+    let allValidTransactions = [];
     let currentToBlock;
 
     for (let currentFirstBlock = 25657968; currentFirstBlock < latestBlock; currentFirstBlock = currentToBlock + 1) {
@@ -39,26 +39,31 @@ const getEvents = async (dsaAccounts) => {
 
         // filter out transaction hashes between the current block range that emitted both IncreaseLiquidity and DecreaseLiquidity events
         // also filter according to the condition that the tokenIds for IncreaseLiquidity and DecreaseLiquidity events must be different
-        const validTransactionHashesInRange = events.map(e => {
-            return {
-                transactionHash: e.transactionHash,
-                tokenId: e.returnValues.tokenId,
-                liquidity: e.returnValues.liquidity
-            };
-        }).filter(transaction => (transactionHashes.has(transaction.transactionHash) && transactionHashes.get(transaction.transactionHash) !== transaction.tokenId));
-
+        const validTransactionInRange = events
+            .filter(transaction => (transactionHashes.has(transaction.transactionHash) && transaction.transactionHash !== transactionHashes.get(transaction.transactionHash)))
+            .map(e => {
+                return {
+                    increaseLiquidityTokenId: transactionHashes.get(e.transactionHash),
+                    decreaseLiquidityTokenId: e.returnValues.tokenId,
+                    transactionHash: e.transactionHash,
+                    liquidity: e.returnValues.liquidity
+                };
+            })
         // append the list for current block range into the overall list
-        allValidTransactionHashes = allValidTransactionHashes.concat(validTransactionHashesInRange);
+        allValidTransactions = allValidTransactions.concat(validTransactionInRange);
 
         // update currentFirstBlock for making the next set of queries
         currentFirstBlock = currentToBlock + 1;
     }
 
+    // console.log(allValidTransactions);
+
     // get transaction data of each transaction hash obtained above 
-    transactionData = await Promise.all(allValidTransactionHashes.map(async (transaction) => {
+    transactionData = await Promise.all(allValidTransactions.map(async (transaction) => {
         const result = await web3.eth.getTransaction(transaction.transactionHash);
         return {
-            tokenId: transaction.tokenId,
+            increaseLiquidityTokenId: transaction.increaseLiquidityTokenId,
+            decreaseLiquidityTokenId: transaction.decreaseLiquidityTokenId,
             liquidity: transaction.liquidity,
             to: result.to,
             from: result.from,
@@ -70,24 +75,22 @@ const getEvents = async (dsaAccounts) => {
     const idappTransactions = transactionData.filter(transaction => dsaAccounts.includes(transaction.to.toLowerCase()));
 
     // create Sets to store unique users and tokenIds
-    const users = new Set();
     const tokenPools = new Set();
 
     let totalLiquidityRebalanced = 0;
 
     idappTransactions.forEach(transaction => {
         // add tokenIds and users of each transaction into respective sets
-        tokenPools.add(transaction.tokenId);
-        users.add(transaction.from);
+        tokenPools.add(transaction.decreaseLiquidityTokenId);
+        tokenPools.add(transaction.increaseLiquidityTokenId);
 
         // update totalRebalancedLiquidity
         totalLiquidityRebalanced += Number(transaction.liquidity);
     })
 
-    console.log("Users: ", users);
-    console.log("No. of unique users: ", users.size);
+    console.log("Total no. of times the strategy got used: ", idappTransactions.length);
     console.log("Token Pools: ", tokenPools);
-    console.log("Total Liquidity rebalanced: ", totalLiquidityRebalanced)
+    console.log("Total Liquidity rebalanced: ", totalLiquidityRebalanced);
 }
 
 const main = async () => {
