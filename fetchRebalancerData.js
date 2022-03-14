@@ -1,5 +1,6 @@
-var Web3 = require("web3");
+const Web3 = require("web3");
 require("dotenv").config();
+const convertLiquidityToTokens = require("./helpers");
 const { getDsaAccounts } = require("./getDsaAccounts");
 
 const alchemyPolygonLink = `https://polygon-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`;
@@ -82,8 +83,11 @@ const getEvents = async (dsaAccounts) => {
         tokenPools.add(transaction.newTokenId);
         totalLiquidityRebalanced += Number(transaction.liquidityRebalanced);
     });
+    // console.log(convertLiquidityToTokens);
+    const transactions = await convertLiquidityToTokens(instadappRebalanceTransactions);
 
-    console.log("List of all Rebalance Transactions on Instadapp: ", instadappRebalanceTransactions);
+    // console.log("List of all Rebalance Transactions on Instadapp: ", instadappRebalanceTransactions);
+    console.log("List of all Rebalance Transactions with Token info: ", transactions);
     console.log("Total no. of times the strategy got used: ", instadappRebalanceTransactions.length);
     console.log("Token Pools: ", tokenPools);
     console.log("Total Liquidity rebalanced: ", totalLiquidityRebalanced);
