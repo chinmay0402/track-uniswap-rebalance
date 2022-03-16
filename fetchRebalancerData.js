@@ -41,7 +41,7 @@ const getEvents = async (dsaAccounts) => {
         // filter out transaction hashes between the current block range that emitted both IncreaseLiquidity and DecreaseLiquidity events
         // also filter according to the condition that the tokenIds for IncreaseLiquidity and DecreaseLiquidity events must be different
         const validTransactionInRange = events
-            .filter(transaction => (transactionHashes.has(transaction.transactionHash) && transaction.transactionHash !== transactionHashes.get(transaction.transactionHash)))
+            .filter(transaction => (transactionHashes.has(transaction.transactionHash) && transaction.returnValues.tokenId !== transactionHashes.get(transaction.transactionHash)))
             .map(e => {
                 return {
                     newTokenId: transactionHashes.get(e.transactionHash),
@@ -52,13 +52,10 @@ const getEvents = async (dsaAccounts) => {
             })
         // append the list for current block range into the overall list
         allValidTransactions = allValidTransactions.concat(validTransactionInRange);
-
-        // update currentFirstBlock for making the next set of queries
-        currentFirstBlock = currentToBlock + 1;
     }
 
     // get transaction data of each transaction hash obtained above 
-    let totalLiquidityRebalanced = 0;
+    let totalLiquidityRebalancedInUsd = 0;
 
     transactionData = await Promise.all(allValidTransactions.map(async (transaction) => {
         const result = await web3.eth.getTransaction(transaction.transactionHash);
@@ -77,20 +74,22 @@ const getEvents = async (dsaAccounts) => {
     // create Sets to store unique users and tokenIds
     const tokenPools = new Set();
 
-    instadappRebalanceTransactions.forEach(transaction => {
+    const transactions = await convertLiquidityToTokens(instadappRebalanceTransactions);
+
+    transactions.forEach(transaction => {
         // add tokenIds and users of each transaction into respective sets
         tokenPools.add(transaction.oldTokenId);
         tokenPools.add(transaction.newTokenId);
-        totalLiquidityRebalanced += Number(transaction.liquidityRebalanced);
+        totalLiquidityRebalancedInUsd += Number(transaction.token0Usd);
+        totalLiquidityRebalancedInUsd += Number(transaction.token1Usd);
     });
     // console.log(convertLiquidityToTokens);
-    const transactions = await convertLiquidityToTokens(instadappRebalanceTransactions);
 
     // console.log("List of all Rebalance Transactions on Instadapp: ", instadappRebalanceTransactions);
     console.log("List of all Rebalance Transactions with Token info: ", transactions);
-    console.log("Total no. of times the strategy got used: ", instadappRebalanceTransactions.length);
+    console.log("Total no. of times the strategy got used: ", transactions.length);
     console.log("Token Pools: ", tokenPools);
-    console.log("Total Liquidity rebalanced: ", totalLiquidityRebalanced);
+    console.log("Total Liquidity rebalanced in USD: ", totalLiquidityRebalancedInUsd);
 }
 
 const main = async () => {
